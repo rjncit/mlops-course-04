@@ -20,4 +20,19 @@ ecr_repositories = [
   }
 ]
 
-
+apprunner_services = [
+  {
+    key = "mlops-course-ehb-app9129"
+    source_configuration = {
+      image_repository = {
+        image_identifier      = "331135961676.dkr.ecr.eu-west-1.amazonaws.com/ecr-mlops-course-ehb-repository9129-dev"
+        image_repository_type = "ECR"
+        image_configuration = {
+          port = 80
+        }
+      }
+      auto_deployments_enabled = true
+    }
+    tags = {}
+  }
+]
