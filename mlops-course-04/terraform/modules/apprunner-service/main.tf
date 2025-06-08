@@ -25,7 +25,7 @@ resource "aws_iam_role" "iamr" {
       {
         "Effect" : "Allow",
         "Principal" : {
-          "Service" : "task.apprunner.amazonaws.com"
+          "Service" : "build.apprunner.amazonaws.com"
         },
         "Action" : "sts:AssumeRole"
       }
