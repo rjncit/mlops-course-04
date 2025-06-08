@@ -6,7 +6,7 @@ resource "aws_apprunner_service" "ars" {
       access_role_arn = aws_iam_role.iamr.arn
     }
     image_repository {
-      image_identifier      = var.source_configuration.image_repository.image_identifier
+      image_identifier      = "331135961676.dkr.ecr.eu-west-1.amazonaws.com/ecr-mlops-course-ehb-repository9129-dev:latest"
       image_repository_type = var.source_configuration.image_repository.image_repository_type
       image_configuration {
         port = var.source_configuration.image_repository.image_configuration.port
