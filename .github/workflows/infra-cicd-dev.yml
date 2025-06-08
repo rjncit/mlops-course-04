@@ -31,9 +31,6 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: eu-west-1
 
-      - name: Terraform Init
-        run: terraform init --backend-config='backends/dev.conf'
-
       - name: Verify ECR Image Exists
         run: |
           REPO_NAME="ecr-mlops-course-ehb-repository9129-dev"
@@ -47,24 +44,8 @@ jobs:
           fi
           echo "ECR image verified successfully"
 
-      - name: Verify IAM Permissions
-        run: |
-          # Using fixed role name pattern that matches your TF code
-          ROLE_NAME="ars-mlops-course-ehb-app9129-dev-iam-role"
-          
-          # Check if role exists
-          if ! aws iam get-role --role-name $ROLE_NAME; then
-            echo "::error::IAM role $ROLE_NAME not found"
-            exit 1
-          fi
-          
-          # Check attached policies
-          echo "Attached policies:"
-          aws iam list-attached-role-policies --role-name $ROLE_NAME
-          
-          # Check inline policies
-          echo "Inline policies:"
-          aws iam list-role-policies --role-name $ROLE_NAME
+      - name: Terraform Init
+        run: terraform init --backend-config='backends/dev.conf'
 
       - name: Terraform Format
         run: terraform fmt -check
@@ -86,5 +67,49 @@ jobs:
           issue-body: "Please review the Terraform Plan"
           exclude-workflow-initiator-as-approver: false
 
+      - name: Verify IAM Role (Pre-Apply)
+        run: |
+          # Get role name from plan output
+          ROLE_NAME=$(terraform show -json plan.tfout | jq -r '.planned_values.root_module.resources[] | select(.type=="aws_iam_role") | .values.name')
+          
+          if [ -z "$ROLE_NAME" ]; then
+            echo "::warning::No IAM role found in Terraform plan"
+            exit 0
+          fi
+          
+          echo "Verifying IAM role: $ROLE_NAME"
+          
+          # Check if role exists (should not exist before apply)
+          if aws iam get-role --role-name $ROLE_NAME 2>/dev/null; then
+            echo "::error::IAM role $ROLE_NAME already exists"
+            exit 1
+          fi
+          echo "IAM role verification passed (role does not exist yet)"
+
       - name: Terraform Apply
         run: terraform apply -auto-approve plan.tfout
+
+      - name: Verify IAM Role (Post-Apply)
+        run: |
+          # Get role name from state
+          ROLE_NAME=$(terraform show -json | jq -r '.values.root_module.resources[] | select(.type=="aws_iam_role") | .values.name')
+          
+          if [ -z "$ROLE_NAME" ]; then
+            echo "::error::No IAM role found in Terraform state"
+            exit 1
+          fi
+          
+          echo "Verifying IAM role after creation: $ROLE_NAME"
+          
+          # Verify role exists and has policies
+          if ! aws iam get-role --role-name $ROLE_NAME; then
+            echo "::error::IAM role $ROLE_NAME not found after creation"
+            exit 1
+          fi
+          
+          echo "Attached policies:"
+          aws iam list-attached-role-policies --role-name $ROLE_NAME
+          
+          echo "Inline policies:"
+          aws iam list-role-policies --role-name $ROLE_NAME
+          echo "IAM role verification successful"
