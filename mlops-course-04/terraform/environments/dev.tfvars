@@ -26,6 +26,7 @@ apprunner_services = [
     source_configuration = {
       image_repository = {
         image_identifier = "331135961676.dkr.ecr.eu-west-1.amazonaws.com/ecr-mlops-course-ehb-repository9129-dev:latest"
+
         image_repository_type = "ECR"
         image_configuration = {
           port = 80
