@@ -52,7 +52,7 @@ jobs:
         timeout-minutes: 60
         with:
           secret: ${{ github.token }}
-          approvers: geekzyn
+          approvers: rjncit
           issue-title: "Deploy Terraform Plan to dev"
           issue-body: "Please review the Terraform Plan"
           exclude-workflow-initiator-as-approver: false
