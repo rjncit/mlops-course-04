@@ -1,18 +1,14 @@
 name: Infrastructure CI/CD
 
-# Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
   pull_request:
     branches: [ "main" ]
     paths: 
       - 'mlops-course-04/terraform/**'
-
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
 jobs:
-  terraform-plan-apply:
+  docker-and-terraform:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -24,8 +20,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - name: Set up Docker image variables
+        run: |
+          echo "REGISTRY=331135961676.dkr.ecr.eu-west-1.amazonaws.com" >> $GITHUB_ENV
+          echo "REPOSITORY=mlops-course-ehb-repository9129-dev" >> $GITHUB_ENV
+          echo "IMAGE_TAG=latest" >> $GITHUB_ENV
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -33,6 +32,18 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: eu-west-1
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Docker image
+        run: docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
+
+      - name: Push Docker image to Amazon ECR
+        run: docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Format
         run: terraform fmt -check
