@@ -1,95 +1,93 @@
-name: Infrastructure CI/CD
+resource "aws_apprunner_service" "ars" {
+  service_name = local.service_name
 
-on:
-  pull_request:
-    branches: [ "main" ]
-    paths: 
-      - 'mlops-course-04/terraform/**'
-  workflow_dispatch:
+  source_configuration {
+    authentication_configuration {
+      access_role_arn = aws_iam_role.iamr.arn
+    }
 
-jobs:
-  terraform-plan-apply:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: mlops-course-04/terraform
-    permissions:
-      issues: write
-      contents: read
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: eu-west-1
-
-      - name: Verify ECR Image Exists
-        run: |
-          REPO_NAME="ecr-mlops-course-ehb-repository9129-dev"
-          IMAGE_DETAILS=$(aws ecr describe-images \
-            --repository-name $REPO_NAME \
-            --query 'imageDetails[0]')
-          
-          if [ -z "$IMAGE_DETAILS" ] || [ "$IMAGE_DETAILS" == "null" ]; then
-            echo "::error::ECR image not found in repository $REPO_NAME"
-            exit 1
-          fi
-          echo "ECR image verified successfully"
-
-      - name: Terraform Init
-        run: terraform init --backend-config='backends/dev.conf'
-
-      - name: Terraform Format
-        run: terraform fmt -check
-        continue-on-error: true
-
-      - name: Terraform Validate
-        run: terraform validate -no-color
-
-      - name: Terraform Plan
-        run: terraform plan -no-color --var-file='environments/dev.tfvars' -out=plan.tfout
+    image_repository {
+      image_identifier      = var.source_configuration.image_repository.image_identifier
+      image_repository_type = var.source_configuration.image_repository.image_repository_type
       
-      - name: Approval
-        uses: trstringer/manual-approval@v1
-        timeout-minutes: 60
-        with:
-          secret: ${{ github.token }}
-          approvers: rjncit
-          issue-title: "Deploy Terraform Plan to dev"
-          issue-body: "Please review the Terraform Plan"
-          exclude-workflow-initiator-as-approver: false
+      image_configuration {
+        port = var.source_configuration.image_repository.image_configuration.port
+        runtime_environment_variables = {
+          "PORT" = "80"
+        }
+      }
+    }
 
-      - name: Verify IAM Role Configuration
-        run: |
-          # Check if plan contains IAM role changes
-          if ! terraform show -json plan.tfout | jq -e '.resource_changes[] | select(.type=="aws_iam_role")' >/dev/null; then
-            echo "::warning::No IAM role changes detected in plan"
-            exit 0
-          fi
-          
-          # Get role name from configuration (not plan)
-          ROLE_NAME="ars-mlops-course-ehb-app9129-dev-iam-role"
-          echo "Verifying IAM role configuration: $ROLE_NAME"
+    auto_deployments_enabled = var.source_configuration.auto_deployments_enabled
+  }
 
-      - name: Terraform Apply
-        run: terraform apply -auto-approve plan.tfout
+  health_check_configuration {
+    protocol            = "HTTP"
+    path                = "/"
+    interval            = 20
+    timeout             = 15
+    healthy_threshold   = 2
+    unhealthy_threshold = 5
+  }
 
-      - name: Post-Apply Verification
-        run: |
-          # Verify App Runner service status
-          SERVICE_NAME="ars-mlops-course-ehb-app9129-dev"
-          SERVICE_STATUS=$(aws apprunner describe-service --service-arn $(terraform output -raw arn) --query 'Service.Status' --output text)
-          
-          if [ "$SERVICE_STATUS" != "RUNNING" ]; then
-            echo "::error::App Runner service $SERVICE_NAME is not RUNNING (status: $SERVICE_STATUS)"
-            exit 1
-          fi
-          echo "App Runner service $SERVICE_NAME is RUNNING"
+  instance_configuration {
+    cpu    = "1024"
+    memory = "2048"
+  }
+
+  network_configuration {
+    egress_configuration {
+      egress_type = "DEFAULT"
+    }
+  }
+
+  tags = var.tags
+}
+
+resource "aws_iam_role" "iamr" {
+  name = "${local.service_name}-iam-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "build.apprunner.amazonaws.com"
+      }
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "apprunner_ecr_access" {
+  role       = aws_iam_role.iamr.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess"
+}
+
+resource "aws_iam_role_policy" "additional_permissions" {
+  name = "apprunner-additional-permissions"
+  role = aws_iam_role.iamr.name
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage",
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetAuthorizationToken",
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ],
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_cloudwatch_log_group" "apprunner" {
+  name              = "/aws/apprunner/${local.service_name}"
+  retention_in_days = 7
+}
