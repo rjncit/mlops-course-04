@@ -1,14 +1,10 @@
 name: Infrastructure CI/CD
 
-# Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
   pull_request:
     branches: [ "main" ]
     paths: 
       - 'mlops-course-04/terraform/**'
-
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
 jobs:
@@ -19,6 +15,7 @@ jobs:
         working-directory: mlops-course-04/terraform
     permissions:
       issues: write
+      contents: read
 
     steps:
       - name: Checkout repository
@@ -33,6 +30,36 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: eu-west-1
+
+      - name: Verify ECR Image Exists
+        id: verify_ecr
+        run: |
+          REPO_NAME="ecr-mlops-course-ehb-repository9129-dev"
+          IMAGE_DETAILS=$(aws ecr describe-images \
+            --repository-name $REPO_NAME \
+            --query 'imageDetails[0]')
+          
+          if [ -z "$IMAGE_DETAILS" ] || [ "$IMAGE_DETAILS" == "null" ]; then
+            echo "::error::ECR image not found in repository $REPO_NAME"
+            exit 1
+          fi
+          
+          echo "ECR image verified successfully"
+          echo "imageDigest=$(echo $IMAGE_DETAILS | jq -r '.imageDigest')" >> $GITHUB_OUTPUT
+
+      - name: Verify IAM Permissions
+        run: |
+          # Get the expected role name from Terraform locals
+          ROLE_NAME=$(terraform output -json | jq -r '.data.value.service_name + "-iam-role"')
+          
+          # Check if role exists
+          aws iam get-role --role-name $ROLE_NAME
+          
+          # Check attached policies
+          aws iam list-attached-role-policies --role-name $ROLE_NAME
+          
+          # Check inline policies
+          aws iam list-role-policies --role-name $ROLE_NAME
 
       - name: Terraform Format
         run: terraform fmt -check
