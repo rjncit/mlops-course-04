@@ -24,8 +24,8 @@ resource "aws_apprunner_service" "ars" {
   health_check_configuration {
     protocol            = "HTTP"
     path                = "/health"
-    interval            = 30
-    timeout             = 20
+    interval            = 20
+    timeout             = 15
     healthy_threshold   = 2
     unhealthy_threshold = 5
   }
