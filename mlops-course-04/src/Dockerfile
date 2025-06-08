@@ -1,18 +1,22 @@
-# Use the official Python base image
 FROM python:3.13-slim
 
-# Set the working directory inside the container
+# Install system dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
-# Copy the application code and models to the working directory
-COPY app.py .
-COPY models/ ./models/
-
-# Copy the requirements file to the working directory
 COPY requirements.txt .
-
-# Install the Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Run the FastAPI application using uvicorn server
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "80"]
+COPY . .
+
+# Health check
+HEALTHCHECK --interval=5s --timeout=3s \
+    CMD curl -f http://localhost:80/health || exit 1
+
+EXPOSE 80
+
+# Use gunicorn for production
+CMD ["gunicorn", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:80", "app:app"]

@@ -23,16 +23,16 @@ resource "aws_apprunner_service" "ars" {
 
   health_check_configuration {
     protocol            = "HTTP"
-    path                = "/"
-    interval            = 20
-    timeout             = 15
+    path                = "/health"
+    interval            = 30
+    timeout             = 20
     healthy_threshold   = 2
     unhealthy_threshold = 5
   }
 
   instance_configuration {
-    cpu    = "1024"
-    memory = "2048"
+    cpu    = "2048"
+    memory = "4096"
   }
 
   network_configuration {
