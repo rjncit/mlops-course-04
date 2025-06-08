@@ -7,7 +7,12 @@ resource "aws_apprunner_service" "ars" {
     }
 
     image_repository {
-      image_identifier      = var.source_configuration.image_repository.image_identifier
+      image_identifier = (
+        contains(var.source_configuration.image_repository.image_identifier, ":")
+        ? var.source_configuration.image_repository.image_identifier
+        : "${var.source_configuration.image_repository.image_identifier}:latest"
+      )
+
       image_repository_type = var.source_configuration.image_repository.image_repository_type
 
       image_configuration {
