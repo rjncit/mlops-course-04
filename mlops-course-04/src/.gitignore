@@ -176,3 +176,8 @@ data/
 models/
 mlruns/ 
 /data
+**/.git
+**/.dvc
+**/__pycache__
+**/*.pyc
+**/.DS_Store

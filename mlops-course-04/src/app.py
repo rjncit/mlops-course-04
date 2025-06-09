@@ -29,8 +29,8 @@ async def root():
 @app.get("/health")
 async def health_check():
     if model is None:
-        return {"status": "error"}, 503
-    return {"status": "healthy"}, 200
+        return JSONResponse(status_code=503, content={"status": "error"})
+    return JSONResponse(status_code=200, content={"status": "healthy"})
 
 @app.post("/predict")
 async def predict(input_data: InputData):
