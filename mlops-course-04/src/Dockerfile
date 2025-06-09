@@ -1,28 +1,27 @@
-# Use official Python slim image
 FROM python:3.13-slim
 
 # Install system dependencies
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
 WORKDIR /app
 
-# Copy and install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy app code
 COPY . .
 
-# Health check for App Runner
-HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:80/health || exit 1
+# Health check configuration
+HEALTHCHECK --interval=10s --timeout=5s \
+            --start-period=30s --retries=3 \
+            CMD curl -f http://localhost:80/health || exit 1
 
-# Expose port 80 to the outside world
+# Explicit port exposure
 EXPOSE 80
 
-# Run the app with Gunicorn and Uvicorn workers on port 80
-CMD ["sh", "-c", "gunicorn -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:${PORT:-80} app:app"]
-
+# Production server configuration
+CMD ["gunicorn", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", \
+     "--bind", "0.0.0.0:80", "--timeout", "120", \
+     "--access-logfile", "-", "app:app"]
